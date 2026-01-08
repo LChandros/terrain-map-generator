@@ -2,6 +2,7 @@
 Main terrain map generator - orchestrates the entire process
 """
 
+import os
 from typing import Optional, Dict, Any
 from elevation_fetcher import ElevationFetcher
 from mesh_builder import MeshBuilder
@@ -76,6 +77,7 @@ class TerrainGenerator:
         marker_height_mm = options.get('marker_height_mm', config.DEFAULT_MARKER_HEIGHT_MM)
         marker_radius_mm = options.get('marker_radius_mm', config.DEFAULT_MARKER_RADIUS_MM)
         filename = options.get('filename', None)
+        split_export = options.get('split_export', False)
         optimize = options.get('optimize', True)
 
         # Convert resolution preset to number
@@ -112,33 +114,62 @@ class TerrainGenerator:
                 print_size_mm=print_size_mm
             )
 
-            terrain_mesh = mesh_builder.build_terrain_mesh()
-
-            # Add marker
-            print("\nAdding marker...")
-            final_mesh = mesh_builder.add_marker(
-                terrain_mesh,
-                marker_lat=marker_lat,
-                marker_lng=marker_lng,
-                marker_height_mm=marker_height_mm,
-                marker_radius_mm=marker_radius_mm
-            )
-
             # Step 3: Export to STL
             print("\n[3/3] Exporting to STL...")
 
             # Generate filename if not provided
             if not filename:
-                filename = f"terrain_{center_lat:.4f}_{center_lng:.4f}.stl"
+                filename = f"terrain_{center_lat:.4f}_{center_lng:.4f}"
+                if not split_export:
+                    filename += ".stl"
 
-            stl_path = self.stl_exporter.export(
-                final_mesh,
-                filename=filename,
-                optimize=optimize
-            )
+            if split_export:
+                # Build separate components
+                terrain_only, base_mesh, marker_mesh = mesh_builder.build_separate_components(
+                    marker_lat=marker_lat,
+                    marker_lng=marker_lng,
+                    marker_height_mm=marker_height_mm,
+                    marker_radius_mm=marker_radius_mm
+                )
 
-            # Get print information
-            print_info = self.stl_exporter.get_print_info(final_mesh)
+                # Export as split files in zip
+                stl_path, stl_files = self.stl_exporter.export_split(
+                    terrain_mesh=terrain_only,
+                    base_mesh=base_mesh,
+                    marker_mesh=marker_mesh,
+                    base_filename=filename,
+                    optimize=optimize
+                )
+
+                # Get print info from terrain (for estimates)
+                print_info = self.stl_exporter.get_print_info(terrain_only)
+                print_info['export_type'] = 'split'
+                print_info['stl_files'] = [os.path.basename(f) for f in stl_files]
+
+            else:
+                # Build combined mesh
+                terrain_mesh = mesh_builder.build_terrain_mesh()
+
+                # Add marker
+                print("\nAdding marker...")
+                final_mesh = mesh_builder.add_marker(
+                    terrain_mesh,
+                    marker_lat=marker_lat,
+                    marker_lng=marker_lng,
+                    marker_height_mm=marker_height_mm,
+                    marker_radius_mm=marker_radius_mm
+                )
+
+                # Export as single STL
+                stl_path = self.stl_exporter.export(
+                    final_mesh,
+                    filename=filename,
+                    optimize=optimize
+                )
+
+                # Get print information
+                print_info = self.stl_exporter.get_print_info(final_mesh)
+                print_info['export_type'] = 'combined'
 
             print("\n" + "=" * 60)
             print("GENERATION COMPLETE!")

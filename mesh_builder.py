@@ -37,9 +37,12 @@ class MeshBuilder:
         # Grid is resolution x resolution, scale to print_size_mm
         self.xy_scale = print_size_mm / self.resolution
 
-    def build_terrain_mesh(self) -> trimesh.Trimesh:
+    def build_terrain_mesh(self, include_base: bool = True) -> trimesh.Trimesh:
         """
         Convert elevation grid to 3D mesh
+
+        Args:
+            include_base: Whether to include the base (default True)
 
         Returns:
             Trimesh object of terrain
@@ -99,8 +102,9 @@ class MeshBuilder:
         # Create terrain mesh
         terrain_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
 
-        # Add bottom face (for 3D printing)
-        terrain_mesh = self._add_base(terrain_mesh)
+        # Add bottom face (for 3D printing) if requested
+        if include_base:
+            terrain_mesh = self._add_base(terrain_mesh)
 
         print(f"  Vertices: {len(terrain_mesh.vertices)}")
         print(f"  Faces: {len(terrain_mesh.faces)}")
@@ -219,6 +223,125 @@ class MeshBuilder:
         combined = trimesh.util.concatenate([mesh, marker])
 
         return combined
+
+    def build_separate_components(
+        self,
+        marker_lat: Optional[float] = None,
+        marker_lng: Optional[float] = None,
+        marker_height_mm: float = config.DEFAULT_MARKER_HEIGHT_MM,
+        marker_radius_mm: float = config.DEFAULT_MARKER_RADIUS_MM
+    ) -> Tuple[trimesh.Trimesh, trimesh.Trimesh, Optional[trimesh.Trimesh]]:
+        """
+        Build terrain, base, and marker as separate meshes for multi-part printing
+
+        Args:
+            marker_lat: Optional marker latitude
+            marker_lng: Optional marker longitude
+            marker_height_mm: Height of marker in mm
+            marker_radius_mm: Radius of marker in mm
+
+        Returns:
+            Tuple of (terrain_only_mesh, base_mesh, marker_mesh)
+            marker_mesh is None if no marker coordinates provided
+        """
+        print("Building separate components for split export...")
+
+        # Build terrain surface only (no base)
+        terrain_only = self.build_terrain_mesh(include_base=False)
+
+        # Build separate base
+        base_mesh = self._build_separate_base()
+
+        # Build separate marker if coordinates provided
+        marker_mesh = None
+        if marker_lat is not None and marker_lng is not None:
+            marker_mesh = self._build_separate_marker(
+                marker_lat, marker_lng,
+                marker_height_mm, marker_radius_mm
+            )
+
+        return terrain_only, base_mesh, marker_mesh
+
+    def _build_separate_base(self) -> trimesh.Trimesh:
+        """
+        Build just the base as a separate mesh
+
+        Returns:
+            Base mesh as a box
+        """
+        # Create a solid box for the base
+        base_height = config.DEFAULT_BASE_HEIGHT_MM
+
+        # Box dimensions match the terrain
+        box_size = [self.print_size_mm, self.print_size_mm, base_height]
+
+        # Create box centered at origin, then shift
+        base_mesh = trimesh.creation.box(extents=box_size)
+
+        # Position it correctly (bottom at z=0, top at z=base_height)
+        base_mesh.apply_translation([
+            self.print_size_mm / 2,
+            self.print_size_mm / 2,
+            base_height / 2
+        ])
+
+        return base_mesh
+
+    def _build_separate_marker(
+        self,
+        marker_lat: float,
+        marker_lng: float,
+        marker_height_mm: float,
+        marker_radius_mm: float
+    ) -> trimesh.Trimesh:
+        """
+        Build just the marker cylinder as a separate mesh
+
+        Args:
+            marker_lat: Marker latitude
+            marker_lng: Marker longitude
+            marker_height_mm: Height of marker in mm
+            marker_radius_mm: Radius of marker in mm
+
+        Returns:
+            Marker mesh
+        """
+        # Convert lat/lng to grid coordinates
+        from elevation_fetcher import ElevationFetcher
+        fetcher = ElevationFetcher()
+        grid_x, grid_y = fetcher.lat_lng_to_grid_coords(
+            marker_lat, marker_lng, self.metadata, self.resolution
+        )
+
+        # Convert grid coords to mesh coordinates
+        mesh_x = grid_x * self.xy_scale
+        mesh_y = grid_y * self.xy_scale
+
+        # Get elevation at marker position
+        terrain_z = self.elevation_grid[grid_y, grid_x]
+        min_elev = np.min(self.elevation_grid)
+        max_elev = np.max(self.elevation_grid)
+        elev_range = max(max_elev - min_elev, 1.0)
+
+        normalized_z = (terrain_z - min_elev) / elev_range
+        max_height_mm = self.print_size_mm * 0.2 * self.vertical_exaggeration
+        marker_base_z = normalized_z * max_height_mm + config.DEFAULT_BASE_HEIGHT_MM
+
+        # Create marker cylinder
+        marker = trimesh.creation.cylinder(
+            radius=marker_radius_mm,
+            height=marker_height_mm,
+            sections=16
+        )
+
+        # Position marker
+        marker.apply_translation([
+            mesh_x,
+            mesh_y,
+            marker_base_z + marker_height_mm / 2
+        ])
+
+        return marker
 
 
 # Example usage

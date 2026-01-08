@@ -72,6 +72,7 @@ def generate_map():
         order_code = f"MAP{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
         # Build options
+        split_export = user_config.get('split_export', False)
         options = {
             'area_km': user_config.get('area_km', config.DEFAULT_AREA_KM),
             'resolution': user_config.get('resolution', 'medium'),
@@ -79,7 +80,8 @@ def generate_map():
             'print_size_mm': user_config.get('print_size_mm', config.PRINT_SIZE_PRESETS['coaster']),
             'marker_height_mm': user_config.get('marker_height_mm', config.DEFAULT_MARKER_HEIGHT_MM),
             'marker_radius_mm': user_config.get('marker_radius_mm', config.DEFAULT_MARKER_RADIUS_MM),
-            'filename': f"{order_code}.stl",
+            'filename': f"{order_code}.{'zip' if split_export else 'stl'}",
+            'split_export': split_export,
             'optimize': True
         }
 

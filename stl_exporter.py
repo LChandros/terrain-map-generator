@@ -4,7 +4,8 @@ STL file exporter for terrain meshes
 
 import os
 import trimesh
-from typing import Optional
+import zipfile
+from typing import Optional, Tuple, List
 import config
 
 
@@ -66,6 +67,77 @@ class STLExporter:
         print(f"  Faces: {len(mesh.faces)}")
 
         return output_path
+
+    def export_split(
+        self,
+        terrain_mesh: trimesh.Trimesh,
+        base_mesh: trimesh.Trimesh,
+        marker_mesh: Optional[trimesh.Trimesh],
+        base_filename: str,
+        optimize: bool = True
+    ) -> Tuple[str, List[str]]:
+        """
+        Export terrain, base, and marker as separate STL files in a zip archive
+
+        Args:
+            terrain_mesh: Terrain surface mesh
+            base_mesh: Base/foundation mesh
+            marker_mesh: Optional marker mesh
+            base_filename: Base filename (without .stl extension)
+            optimize: Whether to optimize meshes for 3D printing
+
+        Returns:
+            Tuple of (zip_path, list_of_stl_paths)
+        """
+        # Remove .stl extension if present
+        if base_filename.endswith('.stl'):
+            base_filename = base_filename[:-4]
+        if base_filename.endswith('.zip'):
+            base_filename = base_filename[:-4]
+
+        print(f"\nExporting split components...")
+
+        # Export each component
+        stl_files = []
+
+        # Terrain
+        terrain_filename = f"{base_filename}_terrain.stl"
+        terrain_path = self.export(terrain_mesh, terrain_filename, optimize=optimize)
+        stl_files.append(terrain_path)
+        print(f"  ✓ Terrain: {terrain_filename}")
+
+        # Base
+        base_filename_stl = f"{base_filename}_base.stl"
+        base_path = self.export(base_mesh, base_filename_stl, optimize=optimize)
+        stl_files.append(base_path)
+        print(f"  ✓ Base: {base_filename_stl}")
+
+        # Marker (optional)
+        if marker_mesh is not None:
+            marker_filename = f"{base_filename}_marker.stl"
+            marker_path = self.export(marker_mesh, marker_filename, optimize=optimize)
+            stl_files.append(marker_path)
+            print(f"  ✓ Marker: {marker_filename}")
+
+        # Create zip archive
+        zip_filename = f"{base_filename}.zip"
+        zip_path = os.path.join(self.output_dir, zip_filename)
+
+        print(f"\nCreating zip archive: {zip_filename}")
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for stl_path in stl_files:
+                # Add file to zip with just the filename (no path)
+                arcname = os.path.basename(stl_path)
+                zipf.write(stl_path, arcname=arcname)
+                print(f"  Added: {arcname}")
+
+        # Get zip file size
+        zip_size_mb = os.path.getsize(zip_path) / (1024 * 1024)
+        print(f"\n✓ Zip archive created: {zip_path}")
+        print(f"  Size: {zip_size_mb:.2f} MB")
+        print(f"  Contains: {len(stl_files)} STL files")
+
+        return zip_path, stl_files
 
     def _optimize_for_printing(self, mesh: trimesh.Trimesh) -> trimesh.Trimesh:
         """

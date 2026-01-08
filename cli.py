@@ -118,6 +118,11 @@ Preset Examples:
         help='Output filename (default: auto-generated)'
     )
     parser.add_argument(
+        '--split-export',
+        action='store_true',
+        help='Export terrain, base, and marker as separate STL files in a zip archive'
+    )
+    parser.add_argument(
         '--no-optimize',
         action='store_true',
         help='Skip mesh optimization'
@@ -143,6 +148,7 @@ Preset Examples:
         'marker_height_mm': args.marker_height,
         'marker_radius_mm': args.marker_radius,
         'filename': args.output,
+        'split_export': args.split_export,
         'optimize': not args.no_optimize
     }
 
