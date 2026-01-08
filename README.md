@@ -6,6 +6,7 @@ Generate 3D printable topographical maps from any location on Earth! Perfect for
 
 - ✅ **Any Location** - Works anywhere in the world using Open-Elevation API
 - ✅ **Custom Markers** - Mark specific spots on the map (e.g., "we first met here")
+- ✅ **Split Export** - Export terrain, base, and marker as separate files for multi-color printing
 - ✅ **Customizable** - Control area size, resolution, vertical exaggeration, print size
 - ✅ **3D Printable** - Exports optimized STL files ready for slicing
 - ✅ **Multiple Interfaces** - CLI, Discord commands, REST API
@@ -68,6 +69,39 @@ Optional:
   --size FLOAT         Print size in mm (default: 100)
   --preset STR         Size preset: coaster/desk/display/wall
   --output STR         Output filename (default: auto-generated)
+  --split-export       Export as separate files for multi-color printing
+  --no-optimize        Skip mesh optimization
+```
+
+## Split Export for Multi-Color Printing
+
+Use `--split-export` to generate separate STL files for terrain, base, and marker. This allows you to print each component in a different color or material!
+
+```bash
+python cli.py --lat 40.7829 --lng -73.9654 --split-export --output my_map
+```
+
+**Output:**
+- `my_map.zip` - Contains all files
+  - `my_map_terrain.stl` - Topographical surface
+  - `my_map_base.stl` - Platform/foundation
+  - `my_map_marker.stl` - Location marker
+
+**Print in multiple colors:**
+1. Print base in black PLA
+2. Print terrain in green/brown PLA
+3. Print marker in red PLA
+4. Assemble the three pieces
+
+**Via API:**
+```json
+{
+  "lat": 40.7829,
+  "lng": -73.9654,
+  "config": {
+    "split_export": true
+  }
+}
 ```
 
 ## Resolution & Size Presets
